@@ -1,17 +1,14 @@
 import streamlit as st
 import requests
 
-# Configuración de las APIs
-KLUSTER_API_URL = "https://api.kluster.ai/v1/chat/completions"
-KLUSTER_API_KEY = st.secrets["KLUSTER_API_KEY"]
-
-EXA_API_URL = "https://api.exa.ai/search"
-EXA_API_KEY = st.secrets["EXA_API_KEY"]
+# Configuración de la API
+API_URL = "https://api.kluster.ai/v1/chat/completions"
+API_KEY = st.secrets["API_KEY"]
 
 # Función para generar contenido usando la API de Kluster.ai
-def generate_kluster_content(prompt):
+def generate_content(prompt):
     headers = {
-        "Authorization": f"Bearer {KLUSTER_API_KEY}",
+        "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json"
     }
     data = {
@@ -23,63 +20,31 @@ def generate_kluster_content(prompt):
             {"role": "user", "content": prompt}
         ]
     }
-    response = requests.post(KLUSTER_API_URL, headers=headers, json=data)
-    if response.status_code == 200:
+    try:
+        response = requests.post(API_URL, headers=headers, json=data)
+        response.raise_for_status()  # Lanza una excepción si el código de estado no es 200
         return response.json()["choices"][0]["message"]["content"]
-    else:
-        return f"Error: {response.status_code}, {response.text}"
-
-# Función para buscar artículos académicos usando la API de Exa.ai
-def search_exa_papers(query):
-    headers = {
-        "accept": "application/json",
-        "content-type": "application/json",
-        "x-api-key": EXA_API_KEY
-    }
-    data = {
-        "query": query,
-        "category": "research paper"
-    }
-    response = requests.post(EXA_API_URL, headers=headers, json=data)
-    if response.status_code == 200:
-        return response.json()["results"]
-    else:
-        return f"Error: {response.status_code}, {response.text}"
-
-# Función para formatear citas en estilo APA
-def format_apa_citation(paper):
-    authors = ", ".join(paper.get("authors", ["Autor desconocido"]))
-    date = paper.get("publication_date", "Fecha desconocida")
-    title = paper.get("title", "Sin título")
-    url = paper.get("url", "#")
-    return f"{authors} ({date}). {title}. Recuperado de {url}"
+    except requests.exceptions.RequestException as e:
+        return f"Error al conectar con la API: {e}"
+    except KeyError:
+        return "Error: La respuesta de la API no contiene los datos esperados."
 
 # Interfaz de Streamlit
-st.title("Generador de Artículos Académicos con Citas")
+st.title("Generador de Tesis y Artículos Académicos")
 
-# Campo de entrada único
+# Entrada del usuario
 area = st.text_input("Ingresa el área científica o filosófica de tu interés:")
 
 if area:
-    # Buscar artículos académicos con Exa.ai
-    st.subheader("Artículos Académicos Relacionados")
-    papers = search_exa_papers(area)
-    if isinstance(papers, list):
-        # Mostrar las citas de los papers
-        st.write("**Papers encontrados:**")
-        for i, paper in enumerate(papers):
-            st.write(f"{i + 1}. {format_apa_citation(paper)}")
+    if st.button("Generar Tesis y Artículo"):
+        # Generar tesis
+        tesis_prompt = f"Genera una tesis original en el área de {area}."
+        tesis = generate_content(tesis_prompt)
+        st.subheader("Tesis Generada")
+        st.write(tesis)
 
-        # Generar un artículo académico con Kluster.ai utilizando los papers como fuentes
+        # Generar el artículo académico basado en la tesis
+        articulo_prompt = f"Desarrolla un artículo académico completo basado en la siguiente tesis: {tesis}. Incluye introducción, metodología, resultados, discusión y conclusión."
+        articulo = generate_content(articulo_prompt)
         st.subheader("Artículo Académico Generado")
-        papers_context = "\n".join([f"Paper {i + 1}: {format_apa_citation(paper)}" for i, paper in enumerate(papers)])
-        article_prompt = (
-            f"Escribe un artículo académico sobre '{area}' utilizando los siguientes papers como fuentes:\n"
-            f"{papers_context}\n\n"
-            "El artículo debe incluir una introducción, un marco teórico, una metodología, resultados, discusión y conclusiones. "
-            "Cita los papers en formato APA dentro del texto."
-        )
-        article = generate_kluster_content(article_prompt)
-        st.write(article)
-    else:
-        st.error(papers)  # Mostrar error si la búsqueda falla
+        st.write(articulo)
