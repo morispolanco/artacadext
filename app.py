@@ -49,36 +49,60 @@ def search_exa_papers(query):
     else:
         return f"Error: {response.status_code}, {response.text}"
 
+# Función para formatear citas en estilo APA
+def format_apa_citation(paper):
+    authors = ", ".join(paper.get("authors", ["Autor desconocido"]))
+    date = paper.get("publication_date", "Fecha desconocida")
+    title = paper.get("title", "Sin título")
+    url = paper.get("url", "#")
+    return f"{authors} ({date}). {title}. Recuperado de {url}"
+
 # Interfaz de Streamlit
-st.title("Generador de Tesis y Búsqueda de Research Papers")
+st.title("Generador de Tesis y Artículo Académico con Citas")
 
 # Campo de entrada único
 area = st.text_input("Ingresa el área científica o filosófica de tu interés:")
 
 if area:
-    # Generar tesis con Kluster.ai
-    st.subheader("Tesis Generada")
-    tesis_prompt = f"Genera una tesis original en el área de {area}."
-    tesis = generate_kluster_content(tesis_prompt)
-    st.write(tesis)
-
-    # Generar plan de desarrollo con Kluster.ai
-    st.subheader("Plan de Desarrollo")
-    plan_prompt = f"Genera un plan para desarrollar la siguiente tesis: {tesis}"
-    plan = generate_kluster_content(plan_prompt)
-    st.write(plan)
-
     # Buscar research papers con Exa.ai
     st.subheader("Research Papers Relacionados")
     papers = search_exa_papers(area)
     if isinstance(papers, list):
-        for paper in papers:
-            title = paper.get("title", "Sin título")
-            authors = ", ".join(paper.get("authors", ["Autor desconocido"]))
-            url = paper.get("url", "#")
-            date = paper.get("publication_date", "Fecha desconocida")
-            # Formatear la cita en estilo APA
-            citation = f"{authors} ({date}). {title}. Recuperado de {url}"
-            st.write(citation)
+        # Mostrar las citas de los papers
+        for i, paper in enumerate(papers):
+            st.write(f"**Paper {i + 1}**: {format_apa_citation(paper)}")
+        
+        # Generar tesis con Kluster.ai
+        st.subheader("Tesis Generada")
+        tesis_prompt = f"Genera una tesis original en el área de {area}."
+        tesis = generate_kluster_content(tesis_prompt)
+        st.write(tesis)
+
+        # Generar plan de desarrollo con Kluster.ai
+        st.subheader("Plan de Desarrollo")
+        plan_prompt = f"Genera un plan para desarrollar la siguiente tesis: {tesis}"
+        plan = generate_kluster_content(plan_prompt)
+        st.write(plan)
+
+        # Generar apartados del artículo académico
+        st.subheader("Apartados del Artículo Académico")
+        apartados_prompt = f"Genera los apartados que contendrá un artículo académico que desarrolle la siguiente tesis: {tesis}"
+        apartados = generate_kluster_content(apartados_prompt)
+        st.write(apartados)
+
+        # Escribir cada apartado del artículo, citando los papers
+        st.subheader("Desarrollo del Artículo con Citas")
+        apartados_list = apartados.split("\n")
+        for apartado in apartados_list:
+            if apartado.strip():
+                st.write(f"**{apartado}**")
+                # Crear un prompt que incluya los papers como fuentes
+                papers_context = "\n".join([f"Paper {i + 1}: {format_apa_citation(paper)}" for i, paper in enumerate(papers)])
+                contenido_prompt = (
+                    f"Escribe el contenido del apartado '{apartado}' para la tesis: {tesis}. "
+                    f"Incluye citas en formato APA de los siguientes papers:\n{papers_context}"
+                )
+                contenido_apartado = generate_kluster_content(contenido_prompt)
+                st.write(contenido_apartado)
     else:
         st.error(papers)  # Mostrar error si la búsqueda falla
