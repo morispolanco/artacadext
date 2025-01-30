@@ -72,7 +72,7 @@ def search_research_papers(query):
         st.error("Respuesta inesperada de la API.")
     return None
 
-# Función cacheada para optimizar solicitudes a Kluster.ai
+# Funciones cacheadas para optimizar solicitudes a Kluster.ai
 @st.cache_data(show_spinner=False)
 def generate_content_cached(prompt):
     return generate_content(prompt)
@@ -191,31 +191,3 @@ if area:
         if st.button("Generar Tesis y Artículo"):
             with st.spinner("Generando contenido..."):
                 generar_articulo(area)
-
-        st.markdown("---")
-        st.header("Buscar y Citar Artículos de Investigación")
-
-        # Entrada para la búsqueda de artículos
-        query = st.text_input("Ingresa una consulta para buscar artículos de investigación:").strip()
-
-        if query:
-            if st.button("Buscar Artículos"):
-                with st.spinner("Buscando artículos de investigación..."):
-                    resultados = search_research_papers_cached(query)
-                if resultados and "results" in resultados and resultados["results"]:
-                    st.subheader("Artículos Encontrados")
-                    for idx, articulo in enumerate(resultados.get("results", []), 1):
-                        titulo = articulo.get("title", "Sin título")
-                        autores = articulo.get("authors", "Autores no disponibles")
-                        resumen = articulo.get("abstract", "Resumen no disponible")
-                        url = articulo.get("url", "#")
-                        año = articulo.get("year", "Año no disponible")
-
-                        st.markdown(f"### {idx}. {titulo}")
-                        st.markdown(f"**Autores:** {autores}")
-                        st.markdown(f"**Año:** {año}")
-                        st.markdown(f"**Resumen:** {resumen}")
-                        st.markdown(f"[Leer más]({url})")
-                        st.markdown("---")
-                else:
-                    st.info("No se encontraron artículos para la consulta proporcionada.")
