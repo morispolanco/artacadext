@@ -30,18 +30,19 @@ def generate_content(prompt):
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"]
     except requests.exceptions.HTTPError as http_err:
-        return f"Error HTTP: {http_err}"
+        st.error(f"Error HTTP: {http_err}")
     except requests.exceptions.ConnectionError:
-        return "Error de conexión. Por favor, verifica tu conexión a internet."
+        st.error("Error de conexión. Por favor, verifica tu conexión a internet.")
     except requests.exceptions.Timeout:
-        return "La solicitud a la API ha excedido el tiempo de espera."
+        st.error("La solicitud a la API ha excedido el tiempo de espera.")
     except requests.exceptions.RequestException as err:
-        return f"Ocurrió un error: {err}"
+        st.error(f"Ocurrió un error: {err}")
     except KeyError:
-        return "Respuesta inesperada de la API."
+        st.error("Respuesta inesperada de la API.")
+    return None
 
-# Función para citar research papers usando la API de Exa.ai
-def citar_research_papers(query):
+# Función para buscar research papers usando la API de Exa.ai
+def search_research_papers(query):
     headers = {
         "accept": "application/json",
         "content-type": "application/json",
@@ -71,30 +72,110 @@ def citar_research_papers(query):
         st.error("Respuesta inesperada de la API.")
     return None
 
-# Funciones cacheadas para optimizar solicitudes
+# Función cacheada para optimizar solicitudes a Kluster.ai
 @st.cache_data(show_spinner=False)
 def generate_content_cached(prompt):
     return generate_content(prompt)
 
+# Función cacheada para optimizar solicitudes a Exa.ai
 @st.cache_data(show_spinner=False)
-def citar_research_papers_cached(query):
-    return citar_research_papers(query)
+def search_research_papers_cached(query):
+    return search_research_papers(query)
 
 # Función para formatear las citas en el texto
-def formatear_citas(contenido, citas):
+def format_citations(citations):
     """
-    Inserta citas en el contenido.
-    Asume que las citas se insertan al final del contenido.
+    Formatea las citas obtenidas de Exa.ai para incluirlas en el contenido.
     """
-    if citas:
-        contenido += "\n\n## Referencias\n"
-        for idx, cita in enumerate(citas.get("results", []), 1):
+    if citations and "results" in citations and citations["results"]:
+        referencias = "\n\n## Referencias\n"
+        for idx, cita in enumerate(citations["results"], 1):
             titulo = cita.get("title", "Sin título")
             autores = cita.get("authors", "Autores no disponibles")
             año = cita.get("year", "Año no disponible")
             url = cita.get("url", "#")
-            contenido += f"{idx}. **{titulo}**. {autores} ({año}). [Leer más]({url})\n"
+            resumen = cita.get("abstract", "Resumen no disponible")
+            referencias += f"{idx}. **{titulo}**. {autores} ({año}). [Leer más]({url})\n"
+        return referencias
+    return ""
+
+# Función para insertar citas en el contenido
+def insert_citations(contenido, citas):
+    """
+    Inserta las citas al final del contenido.
+    """
+    referencias = format_citations(citas)
+    if referencias:
+        contenido += referencias
     return contenido
+
+# Función principal para generar el artículo con citas
+def generar_articulo(area):
+    # Paso 1: Generar tesis
+    tesis_prompt = f"Genera una tesis original en el área de {area}."
+    tesis = generate_content_cached(tesis_prompt)
+    if not tesis:
+        st.error("No se pudo generar la tesis.")
+        return
+    st.subheader("1. Tesis Generada")
+    st.write(tesis)
+
+    # Buscar citas para la tesis
+    st.info("Buscando citas relevantes para la tesis...")
+    citas_tesis = search_research_papers_cached(tesis)
+    tesis_con_citas = insert_citations(tesis, citas_tesis)
+    st.markdown("**Tesis con Citas:**")
+    st.write(tesis_con_citas)
+
+    # Paso 2: Generar plan de desarrollo
+    plan_prompt = f"Genera un plan detallado para desarrollar la siguiente tesis: {tesis}."
+    plan = generate_content_cached(plan_prompt)
+    if not plan:
+        st.error("No se pudo generar el plan de desarrollo.")
+        return
+    st.subheader("2. Plan de Desarrollo")
+    st.write(plan)
+
+    # Buscar citas para el plan
+    st.info("Buscando citas relevantes para el plan de desarrollo...")
+    citas_plan = search_research_papers_cached(plan)
+    plan_con_citas = insert_citations(plan, citas_plan)
+    st.markdown("**Plan de Desarrollo con Citas:**")
+    st.write(plan_con_citas)
+
+    # Paso 3: Generar apartados del artículo académico
+    apartados_prompt = f"Genera una lista de apartados que contendrá un artículo académico que desarrolle la siguiente tesis: {tesis}."
+    apartados = generate_content_cached(apartados_prompt)
+    if not apartados:
+        st.error("No se pudieron generar los apartados del artículo académico.")
+        return
+    st.subheader("3. Apartados del Artículo Académico")
+    st.write(apartados)
+
+    # Parsear los apartados
+    apartados_list = re.split(r'\d+\.\s+', apartados)
+    apartados_list = [apartado.strip() for apartado in apartados_list if apartado.strip()]
+
+    # Paso 4: Escribir cada apartado con citas
+    st.subheader("4. Desarrollo de los Apartados con Citas")
+    for apartado in apartados_list:
+        st.markdown(f"### **{apartado}**")
+
+        # Generar contenido del apartado
+        contenido_prompt = f"Escribe el contenido del apartado '{apartado}' para la tesis: {tesis}. Asegúrate de citar fuentes relevantes y proporciona referencias al final."
+        contenido = generate_content_cached(contenido_prompt)
+        if not contenido:
+            st.error(f"No se pudo generar el contenido para el apartado: {apartado}")
+            continue
+
+        # Buscar citas para el apartado
+        st.info(f"Buscando citas relevantes para el apartado: {apartado}...")
+        palabras_clave = f"{area}, {apartado}"
+        citas_apartado = search_research_papers_cached(palabras_clave)
+
+        # Insertar citas en el contenido
+        contenido_con_citas = insert_citations(contenido, citas_apartado)
+        st.write(contenido_con_citas)
 
 # Interfaz de Streamlit
 st.set_page_config(page_title="Generador de Tesis y Artículos Académicos", layout="wide")
@@ -108,49 +189,8 @@ if area:
         st.warning("Por favor, ingresa un área de al menos 3 caracteres.")
     else:
         if st.button("Generar Tesis y Artículo"):
-            # Paso 1: Generar tesis
-            tesis_prompt = f"Genera una tesis original en el área de {area}."
-            with st.spinner("Generando tesis..."):
-                tesis = generate_content_cached(tesis_prompt)
-            st.subheader("1. Tesis Generada")
-            st.write(tesis)
-
-            # Paso 2: Generar plan de desarrollo
-            plan_prompt = f"Genera un plan detallado para desarrollar la siguiente tesis: {tesis}"
-            with st.spinner("Generando plan de desarrollo..."):
-                plan = generate_content_cached(plan_prompt)
-            st.subheader("2. Plan de Desarrollo")
-            st.write(plan)
-
-            # Paso 3: Generar apartados del artículo académico
-            apartados_prompt = f"Genera una lista de apartados que contendrá un artículo académico que desarrolle la siguiente tesis: {tesis}"
-            with st.spinner("Generando apartados del artículo académico..."):
-                apartados = generate_content_cached(apartados_prompt)
-            st.subheader("3. Apartados del Artículo Académico")
-            st.write(apartados)
-
-            # Parsear los apartados
-            apartados_list = re.split(r'\d+\.\s+', apartados)
-            apartados_list = [apartado.strip() for apartado in apartados_list if apartado.strip()]
-
-            # Paso 4: Escribir cada apartado con citas
-            st.subheader("4. Desarrollo de los Apartados con Citas")
-            for apartado in apartados_list:
-                if apartado:
-                    st.markdown(f"### **{apartado}**")
-                    
-                    # Generar contenido del apartado
-                    contenido_prompt = f"Escribe el contenido del apartado '{apartado}' para la tesis: {tesis}. Asegúrate de citar fuentes relevantes y proporciona referencias al final."
-                    contenido = generate_content_cached(contenido_prompt)
-
-                    # Extraer palabras clave para buscar citas relevantes
-                    palabras_clave = f"{area}, {apartado}"
-                    citas = citar_research_papers_cached(palabras_clave)
-
-                    # Formatear el contenido con las citas
-                    contenido_con_citas = formatear_citas(contenido, citas)
-
-                    st.write(contenido_con_citas)
+            with st.spinner("Generando contenido..."):
+                generar_articulo(area)
 
         st.markdown("---")
         st.header("Buscar y Citar Artículos de Investigación")
@@ -161,7 +201,7 @@ if area:
         if query:
             if st.button("Buscar Artículos"):
                 with st.spinner("Buscando artículos de investigación..."):
-                    resultados = citar_research_papers_cached(query)
+                    resultados = search_research_papers_cached(query)
                 if resultados and "results" in resultados and resultados["results"]:
                     st.subheader("Artículos Encontrados")
                     for idx, articulo in enumerate(resultados.get("results", []), 1):
